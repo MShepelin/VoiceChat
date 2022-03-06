@@ -1,0 +1,3 @@
+audioop
+pyaudio
+numpy

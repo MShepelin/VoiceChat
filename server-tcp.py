@@ -2,7 +2,6 @@
 
 import socket
 import threading
-import audioop
 import time
 import numpy as np
 from communication import AUDIO_CHUNK, ROOM_ID_SIZE, NAME_SIZE
