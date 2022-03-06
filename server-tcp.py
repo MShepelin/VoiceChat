@@ -5,8 +5,9 @@ import threading
 import audioop
 import time
 import numpy as np
-from communication import AUDIO_CHUNK, ROOM_ID_SIZE, SILENCE_RMS, DELTA_TIME
+from communication import AUDIO_CHUNK, ROOM_ID_SIZE, NAME_SIZE
 
+print_lock = threading.Lock()
 
 class ClientAudioReceiver:
     def __init__(self, room_id, sock, addr, on_remove):
@@ -29,12 +30,14 @@ class ClientAudioReceiver:
             self.batches.append(np.frombuffer(batch, dtype='int16'))
 
     def process_audio(self):
-        while True:
+        while not self.sock._closed:
             with self.audio_buffer:
                 if len(self.batches) > 0:
                     data = np.array(self.batches, dtype='int16').mean(axis=0, dtype='int16') # np.frombuffer(batch, dtype='int16').tobytes()
                     threading.Thread(target=self.send_and_check, args=(data,)).start()
                     self.batches = []
+
+        self.on_remove(self.addr)
 
     def run(self):
         threading.Thread(target=self.process_audio, args=()).start()
@@ -63,20 +66,22 @@ class Room:
                     client.add_to_buffer(data)
 
     def handle_client(self, sock, addr):
+        global print_lock
         while 1:
             try:
                 data = sock.recv(AUDIO_CHUNK)
-                # audioop.rms(data, 2) ? SILENCE_RMS
                 self.broadcast(addr, data)
             except socket.error:
-                # connection closed
                 sock.close()
+                break
+
+        with print_lock:
+            print("Connection with", addr, "in room", self.room_id, "finished")
 
 
 class Server:
     def __init__(self):
         self.addr_to_room = {}
-        self.print_lock = threading.Lock()
         self.room_lock = threading.Lock()
 
         self.ip = socket.gethostbyname(socket.gethostname())
@@ -93,7 +98,7 @@ class Server:
 
     def accept_connections(self):
         self.s.listen(100)
-    
+
         print('Running on IP: '+self.ip)
         print('Running on port: '+str(self.port))
         
@@ -108,9 +113,17 @@ class Server:
                 self.addr_to_room.pop(room_id)
 
     def handle_client(self,c,addr):
-        room_id = c.recv(ROOM_ID_SIZE)
-        with self.print_lock:
-            print("Got user with room_id", room_id)
+        global print_lock
+        try:
+            room_id = c.recv(ROOM_ID_SIZE)
+            user_name = c.recv(NAME_SIZE)
+        except:
+            with print_lock:
+                print("User initialisation failed")
+            return
+
+        with print_lock:
+            print("Got user", user_name, "with room_id", room_id)
         with self.room_lock:
             if room_id not in self.addr_to_room:
                 self.addr_to_room[room_id] = Room(room_id)
