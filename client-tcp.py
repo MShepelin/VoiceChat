@@ -5,8 +5,10 @@ import threading
 import pyaudio
 import queue
 import audioop
-# audioop.rms(data, 2) ? SILENCE_RMS
-from communication import AUDIO_CHUNK, ROOM_ID_SIZE, NAME_SIZE
+from communication import \
+    AUDIO_CHUNK, ROOM_ID_SIZE, \
+    NAME_SIZE, SLIDING_MEAN, \
+    SILENCE_RMS, ACTIVATION_RMS
 
 
 class Client:
@@ -54,10 +56,32 @@ class Client:
                 pass
 
     def send_data_to_server(self):
+        data_queue = queue.Queue()
+        cur_rms = 0
+
         while True:
             try:
                 data = self.recording_stream.read(AUDIO_CHUNK)
-                self.s.sendall(data)
+                rms = audioop.rms(data, 2)
+
+                if data_queue.qsize() > 0:
+                    data_queue.put(rms, block=False)
+                    cur_rms += rms
+
+                    if data_queue.qsize() < SLIDING_MEAN:
+                        self.s.sendall(data)
+                    else:
+                        cur_rms -= data_queue.get(block=False)
+                        if cur_rms / data_queue.qsize() < SILENCE_RMS:
+                            data_queue = queue.Queue()
+                        else:
+                            self.s.sendall(data)
+
+                elif rms > ACTIVATION_RMS:
+                    data_queue.put(rms, block=False)
+                    cur_rms += rms
+                    self.s.sendall(data)
+
             except socket.error as e:
                 self.s.close()
                 print('Session ended', flush=True)
