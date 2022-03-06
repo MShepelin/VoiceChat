@@ -6,12 +6,14 @@
 
 **Запуск сервера** можно осуществить через docker, а также через локальный запуск питоновского файла. При запуске контейнера docker не забудьте сделать expose выбранного порта.
 
+DockerHub: https://hub.docker.com/r/mityashepelin/voice-chat
+
 ```bash
 > docker pull mityashepelin/voice-chat
-> docker run -p 8080:8080 mityashepelin/voice-chat
+> docker run -p 8080:8080 -i mityashepelin/voice-chat
 Enter port number to run on --> 808
 Couldn't bind to that port
-Enter port number to run on --> 8081
+Enter port number to run on --> 8080
 Running on IP: 172.23.144.1
 Running on port: 8081
 Got user b'e' with room_id b'000000000000000e'
